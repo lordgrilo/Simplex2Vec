@@ -26,7 +26,7 @@ class Simplex2Vec():
         walk_length : int (default: 15)
             Number of nodes visited by each RW.
         p : float (default: 1)
-            Return parameter for the RWs (same as in Node2Vec). 
+            Return parameter for the RWs (same as in Node2Vec). Set it to a very high value to avoid backtracking.
         q : float (default: 1)
             In-Out parameter for the RWs (same as in Node2Vec).
         hasse_max_order : int (default: None)
@@ -49,13 +49,13 @@ class Simplex2Vec():
             raise ValueError('G must be a NetworkX Graph.')
 
         #Check and set p
-        if p >= 0:
+        if p > 0:
             self.p = p
         else:
             raise ValueError('p must be a positive number.')
 
         #Check and set q
-        if q >= 0:
+        if q > 0:
             self.q = q
         else:
             raise ValueError('q must be a positive number.')
