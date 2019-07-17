@@ -49,13 +49,13 @@ class Simplex2Vec():
             raise ValueError('G must be a NetworkX Graph.')
 
         #Check and set p
-        if p => 0:
+        if p >= 0:
             self.p = p
         else:
             raise ValueError('p must be a positive number.')
 
         #Check and set q
-        if q => 0:
+        if q >= 0:
             self.q = q
         else:
             raise ValueError('q must be a positive number.')
