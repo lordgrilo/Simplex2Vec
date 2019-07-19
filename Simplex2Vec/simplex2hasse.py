@@ -9,7 +9,7 @@ from scipy.special import perm, factorial
 import os
 
 def _stirling(n):
-    return np.sqrt(2*np.pi*n)*(n/np.e)**n
+    return np.ceil(np.sqrt(2*np.pi*n)*(n/np.e)**n)
 
 def simplex2hasse_uniform(data, max_order=None):
     '''Returns the Hasse diagram as a networkX graph (undirected, simple). 
@@ -186,9 +186,9 @@ def simplex2hasse_LOadjusted(data, max_order=None):
 
                 ## EXACT CALCULATIONS : Comment prev bloc and uncomment this one
 #                 if fs in weights_dict:
-#                     weights_dict[fs] += 1/(factorial(level)*factorial(level+1)) 
+#                     weights_dict[fs] += 1/(factorial(level)*factorial(level+1)) #perm(top_simplex_order, level))
 #                 else:
-#                     weights_dict[fs] = 1/(factorial(level)*factorial(level+1))
+#                     weights_dict[fs] = 1/(factorial(level)*factorial(level+1)) #perm(top_simplex_order, level))
 
 
             l.add((frozenset(simplex), fs))
@@ -229,7 +229,6 @@ def simplex2hasse_LOadjusted(data, max_order=None):
 
     
     nx.set_node_attributes(g, weights_dict, 'weight')
-    
     return g
 
 def simplex2hasse_LOlinear(data, max_order=None):
