@@ -8,7 +8,8 @@ from tqdm import tqdm
 from scipy.special import perm, factorial
 import os
 
-
+def _stirling(n):
+    return np.sqrt(2*np.pi*n)*(n/np.e)**n
 
 def simplex2hasse_uniform(data, max_order=None):
     '''Returns the Hasse diagram as a networkX graph (undirected, simple). 
@@ -119,9 +120,9 @@ def simplex2hasse_LO(data, max_order=None):
             fs = frozenset(s)
             if len(s) > 0:
                 if fs in weights_dict:
-                    weights_dict[fs] += weights_dict[frozenset(simplex)]/float(len(simplex))
+                    weights_dict[fs] += perm(top_simplex_order, level)/(_stirling(level))
                 else:
-                    weights_dict[fs] = weights_dict[frozenset(simplex)]/float(len(simplex))
+                    weights_dict[fs] = perm(top_simplex_order, level)/(_stirling(level))
                 l.append((frozenset(simplex), fs))
             if len(s) > 1:
                 _build_simplices(s,l)
@@ -169,9 +170,6 @@ def simplex2hasse_LOadjusted(data, max_order=None):
     Input: list of frozensets
     Output: networkx Graph object
     '''
-
-    def stirling(n):
-        return np.sqrt(2*np.pi*n)*(n/np.e)**n
         
     def _build_simplices(simplex, l):
         #recursive function that calculates all possible son simplices
@@ -182,15 +180,15 @@ def simplex2hasse_LOadjusted(data, max_order=None):
                 
                 ###
                 if fs in weights_dict:
-                    weights_dict[fs] += 1/(stirling(level)*perm(top_simplex_order, level))
+                    weights_dict[fs] += 1/(_stirling(level)*_stirling(level+1))
                 else:
-                    weights_dict[fs] = 1/(stirling(level)*perm(top_simplex_order, level))
+                    weights_dict[fs] = 1/(_stirling(level)*_stirling(level+1))
 
-                ### EXACT CALCULATIONS : Comment prev bloc and uncomment this one
-                #if fs in weights_dict:
-                #    weights_dict[fs] += 1/(factorial(level)*perm(top_simplex_order, level))
-                #else:
-                #    weights_dict[fs] = 1/(factorial(level)*perm(top_simplex_order, level))
+                ## EXACT CALCULATIONS : Comment prev bloc and uncomment this one
+#                 if fs in weights_dict:
+#                     weights_dict[fs] += 1/(factorial(level)*factorial(level+1)) 
+#                 else:
+#                     weights_dict[fs] = 1/(factorial(level)*factorial(level+1))
 
 
             l.add((frozenset(simplex), fs))
@@ -252,9 +250,9 @@ def simplex2hasse_LOlinear(data, max_order=None):
             if len(s) > 0:
                 
                 if fs in weights_dict:
-                    weights_dict[fs] += 1/(factorial(level)*(level+1))
+                    weights_dict[fs] += 1/(stirling(level)*(level+1))
                 else:
-                    weights_dict[fs] = 1/(factorial(level)*(level+1))
+                    weights_dict[fs] = 1/(stirling(level)*(level+1))
 
             l.add((frozenset(simplex), fs))
             if len(s) > 1:
