@@ -16,7 +16,7 @@ from Simplex2Vec.simplex2hasse import *
 
 class Simplex2Vec():
 
-    def __init__(self, G, n_walks=10, walk_length=15, p=1, q=1, hasse_max_order=None, hasse_weight_scheme='LOa',  workers=1, from_hasse=False):
+    def __init__(self, G, n_walks=10, walk_length=15, p=1, q=1, hasse_max_order=None, hasse_weight_scheme='LOa',  workers=1, from_hasse=False, from_graph=False):
         '''
         Finds simplicial complexes in a network, creates Hasse diagram with chosen weighting scheme and performs the random walks.
         G : NetworkX Graph
@@ -41,6 +41,8 @@ class Simplex2Vec():
         workers : int (default: 1)
             Number of processes to be used.
         from_hasse : bool (default: False)
+            Not meant to be set by the user, keep the default value.
+        from_graph : bool (default: False)
             Not meant to be set by the user, keep the default value.
         '''
 
@@ -100,6 +102,10 @@ class Simplex2Vec():
 
             self.hasse = G
 
+        elif from_graph:
+            
+            self.hasse = G
+            
         else:
         #build hasse diagram
 
@@ -107,7 +113,6 @@ class Simplex2Vec():
             cliques = [frozenset([str(i) for i in li]) for li in cliques]
 
             self._build_hasse(hasse_weight_scheme, cliques)
-
 
 
         #Check and set walk length
@@ -134,6 +139,13 @@ class Simplex2Vec():
 
 
     @classmethod
+    def from_graph(cls, inData, threshold=0.5, n_walks=10, walk_length=5, p=1, q=1, hasse_max_order=None, workers=1):
+
+        g = graph2hasse_proportional(inData, threshold, hasse_max_order)
+
+        return cls(g, n_walks=n_walks, walk_length=walk_length, p=p, q=q, workers=workers, hasse_max_order=hasse_max_order, from_graph=True)
+    
+    @classmethod
     def read_hasse_diagram(cls, filename, n_walks=10, walk_length=10, p=1, q=1, hasse_max_order=None, workers=1):
 
         if os.path.exists(filename):
@@ -143,7 +155,6 @@ class Simplex2Vec():
             raise FileNotFoundError('Could not find {}')
                 
         return cls(g, n_walks, walk_length, p, q, hasse_max_order, hasse_weight_scheme=None,  workers=workers, from_hasse=True)
-
 
 
     def get_hasse_diagram(self, copy=True):
@@ -178,6 +189,9 @@ class Simplex2Vec():
 
         elif 'LOl' == w_scheme:
             self.hasse = simplex2hasse_LOlinear(cliques, self.max_order)
+            
+        #elif 'proportional' == w_scheme:
+        #    self.hasse = simplex2hasse_proportional( cliques , self.max_order)
 
         else:
             raise ValueError('{} is not a valid weighting scheme.'.format(w_scheme))
@@ -196,7 +210,10 @@ class Simplex2Vec():
             for j in range(self.walk_length-1):
 
                 neighb = list(self.hasse.neighbors(node))
-                w = [self.hasse.nodes[n]['weight'] for n in neighb]
+                if isinstance(self.hasse,nx.DiGraph):
+                    w = [self.hasse.edges[node,n]['weight'] for n in neighb]
+                else:
+                    w = [self.hasse.nodes[n]['weight'] for n in neighb]
 
                 if None == prev_node:
                     prob = np.array(w)/np.sum(w)
@@ -238,7 +255,10 @@ class Simplex2Vec():
 
         l_walks = []
         for rw in self.walks:
-            l_walks.append(["-".join(sorted(list(u))) for u in rw])
+            if isinstance(self.hasse,nx.DiGraph):
+                l_walks.append([u for u in rw])
+            else:
+                l_walks.append(["-".join(sorted(list(u))) for u in rw])
 
         self.walks = l_walks
 

@@ -292,3 +292,158 @@ def simplex2hasse_LOlinear(data, max_order=None):
     nx.set_node_attributes(g, weights_dict, 'weight')
     
     return g
+
+
+def graph2hasse(M, threshold, maxOrder):
+    #graph2hasse chooses a cutoff threshold to establish simplices    
+    
+    # M is an MxM undirected weighted graph
+    # Values should be Fischer z-scored to achieve a Gaussian distribution
+    
+    # minZStat is a lower bound for choice of cutoff. Must be reasonable for computation and interpretation
+    
+    # Perform thresholding
+    Mt = nx.convert_matrix.to_numpy_matrix(M)
+    cutoff = threshold
+    #print('cutoff = ' + str(cutoff))
+    Mt[Mt<cutoff] = 0
+    Mt[Mt>cutoff] = 1
+
+    Mx=nx.from_numpy_matrix(Mt)
+    
+    all_cliques = [np.asarray(sorted(l)) for l in nx.enumerate_all_cliques(Mx)]
+    all_cliques_str = [str(sorted(l)) for l in nx.enumerate_all_cliques(Mx)]
+    sz_all_cliques_str = np.size(all_cliques_str)
+    
+    mx_cliques = [np.asarray(sorted(l)) for l in nx.find_cliques(Mx)]
+    mx_cliques_str = [str(sorted(l)) for l in nx.find_cliques(Mx)]
+    sz_mx_cliques_str = np.size(mx_cliques_str)
+    
+    # initialize the Hasse graph (diagram)
+    hasse = nx.Graph()
+
+    # go through the simplices, create nodes
+    #sz_l = []
+    for i in range(sz_all_cliques_str):
+        u = all_cliques_str[i]
+        v = all_cliques[i]
+        sz = v.size
+        #sz_l.append(sz)
+        prb = 1
+        hasse.add_node(u,size=sz,bNodes=v,prob=prb,name=u)          
+        
+    #plt.hist(sz_l)
+    #plt.suptitle(['Cutoff = ' + str(cutoff)])
+    #plt.show()
+    
+    def deeperEdge(ss, ll, hasse):
+        v = hasse.nodes[ss]['bNodes']
+        sz = hasse.nodes[ss]['size']
+        for vv in itertools.combinations(v,sz-1):
+            vvv = str(list(vv))
+            ll.append((ss,vvv))
+            
+            if sz>2:
+                ll = deeperEdge(vvv,ll,hasse)        
+                
+        return ll
+        
+    # create edges in the Hasse graph (diagram)
+    # Initialize Hess    
+    for i in np.arange(sz_mx_cliques_str):
+        u = mx_cliques_str[i]
+        sz = hasse.nodes[u]['size']
+        if sz>1:
+            buff = []
+            buff = deeperEdge(u,buff,hasse)
+            hasse.add_edges_from(buff)                    
+            
+    return hasse #, cutoff, sz_l
+
+def graph2hasse_proportional(M, threshold, maxOrder):
+    #graph2hasse chooses a cutoff threshold to establish simplices    
+    
+    # M is an MxM undirected weighted graph of gaussian distributed correlation z-statistics           
+    # threshold is an lower bound for choice of cutoff. Must be reasonable for computation and interpretation
+    # Output graph, hasse, is directed with weights proportional to the inverse of the sum of input edge weights
+    
+    # Perform thresholding
+    n, n = M.shape
+    maxM = np.max(M)
+    Mt = M + 0.0
+    indzero = Mt<threshold
+    indone = Mt>threshold
+    Mt[indzero] = 0
+    Mt[indone] = 1
+
+    Mx=nx.from_numpy_matrix(Mt)
+        
+    all_cliques_iter = nx.enumerate_all_cliques(Mx)
+    
+    # initialize the Hasse graph (diagram)
+    hasse = nx.DiGraph()
+
+    # go through the simplices, create nodes
+    all_cliques = []
+    all_cliques_str = []
+    all_cliques_sz = []
+    keeps = []
+    for clq in all_cliques_iter:
+        sclq = sorted(clq)
+        v = np.asarray(sclq)
+        u = str(sclq)
+        sz = v.size
+    
+        if maxOrder != None and sz>maxOrder:
+            break
+            # The enumerate_all_cliques iter is ordered by clique size, so we can break to truncate large cliques
+        
+        if sz == 1:
+            prb = 1
+        else:
+            # Normalize Fischer-z correlations to range < 1, and take product to assign node probabilities
+            prb = np.prod(abs(np.asarray([M[a,b] for a,b in itertools.combinations(v,2)])/maxM))
+            #prb = np.prod(.5*(np.log(1+prb) - np.log(1-prb)))
+            #print([sz, u, prb])
+            
+        
+        hasse.add_node(u,size=sz,bNodes=v,prob=prb,name=u)
+        
+        all_cliques.append(v)
+        all_cliques_str.append(u)
+        all_cliques_sz.append(sz)
+        
+    sz_all_cliques = np.size(all_cliques)        
+        
+    # create edges in the Hasse graph (diagram)
+    # Start from the top and work down
+    for i in np.arange(sz_all_cliques-1,-1,-1):
+        u = all_cliques_str[i]
+        v = hasse.nodes[u]['bNodes']
+        sz = hasse.nodes[u]['size']
+        if sz>1:
+            for vv in itertools.combinations(v,sz-1):
+                vvv = str(sorted(vv))
+                # initially weight directed edges based on target node probabilities
+                hasse.add_edge(u, vvv, weight=hasse.nodes[vvv]['prob'])                    
+                hasse.add_edge(vvv, u, weight=hasse.nodes[u]['prob'])                        
+                    
+    for i in range(sz_all_cliques):
+        u = all_cliques_str[i]
+        sz = all_cliques_sz[i]
+        hi_sz = sz+1
+        probs_hi = 0
+        lo_sz = sz-1
+        probs_lo = 0
+        for nb in hasse.neighbors(u):
+            if hasse.nodes[nb]['size']==hi_sz:
+                probs_hi += hasse.nodes[nb]['prob']
+            elif hasse.nodes[nb]['size']==lo_sz:
+                probs_lo += hasse.nodes[nb]['prob']
+        for nb in hasse.neighbors(u):
+            if hasse.nodes[nb]['size']==hi_sz:
+                hasse.add_edge(u, nb, weight=hasse.nodes[nb]['prob']/probs_hi/2)                    
+            elif hasse.nodes[nb]['size']==lo_sz:
+                hasse.add_edge(u, nb, weight=hasse.nodes[nb]['prob']/probs_lo/2)                    
+            
+    return hasse    
