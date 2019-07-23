@@ -249,9 +249,9 @@ def simplex2hasse_LOlinear(data, max_order=None):
             if len(s) > 0:
                 
                 if fs in weights_dict:
-                    weights_dict[fs] += 1/(stirling(level)*(level+1))
+                    weights_dict[fs] += 1/(_stirling(level)*(level+1))
                 else:
-                    weights_dict[fs] = 1/(stirling(level)*(level+1))
+                    weights_dict[fs] = 1/(_stirling(level)*(level+1))
 
             l.add((frozenset(simplex), fs))
             if len(s) > 1:
@@ -293,6 +293,91 @@ def simplex2hasse_LOlinear(data, max_order=None):
     
     return g
 
+def simplex2hasse_proportional(data, max_order=None):
+    '''Returns the Hasse diagram as a networkX DiGraph (directed, weighted) with cumulative appearance counts on nodes 
+    adjusted by the diagram level. Adjustment coefficient for n-simplex on level k (level of k-simplices) is 1/(k+1))
+    
+    Example: 3-simplex (tetrahedron) appearing in the data receives weight 1, adjacent 2-simplices (triangles) receive weigth 1/2, 
+        1-simplices (edges) receive 1/3, 0-simplices (nodes) receive 1/4.
+    Input: list of frozensets
+    Output: networkx Graph object
+    '''
+        
+    def _build_simplices(simplex, l):
+        #recursive function that calculates all possible son simplices
+        for s in itertools.combinations(simplex, len(simplex)-1):
+            fs = frozenset(s)
+            level = top_simplex_order-len(simplex) + 1
+            if len(s) > 0:
+                
+                if fs in weights_dict:
+                    weights_dict[fs] += 1/(_stirling(level)*(level+1))
+                else:
+                    weights_dict[fs] = 1/(_stirling(level)*(level+1))
+
+            l.add((frozenset(simplex), fs))
+            if len(s) > 1:
+                _build_simplices(s,l)
+        return  
+        
+    # execute cleaning of the dataset - remove duplicate simplices
+    data = list(set(data))
+
+    # initialize the Hasse graph (diagram)
+    g = nx.Graph()
+    weights_dict = {}
+    
+    # go through the simplices, create nodes
+    for u in tqdm(data, 'Creating Hasse diagram'):
+
+        if None == max_order or (len(u) < max_order+1 and len(u) >= 1):
+            if u not in weights_dict:
+                weights_dict[u] = 1.
+            else:
+                weights_dict[u] += 1.
+            buff = set({})
+            top_simplex_order = len(u)
+            _build_simplices(u, buff)
+            g.add_edges_from(buff)
+        else:
+            for v in itertools.combinations(u, max_order+1):
+                if frozenset(v) not in weights_dict:
+                    weights_dict[frozenset(v)] = 1.
+                else:
+                    weights_dict[frozenset(v)] += 1.
+                buff = set({})
+                top_simplex_order = len(v)
+                _build_simplices(v, buff)
+                g.add_edges_from(buff)
+    
+    nx.set_node_attributes(g, weights_dict, 'prob')
+    all_cliques = g.nodes
+    bg = nx.DiGraph()
+    
+    for u in g.nodes:
+        sz = len(u)
+        hi_sz = sz+1
+        probs_hi = 0
+        lo_sz = sz-1
+        probs_lo = 0
+        for nb in g.neighbors(u):
+            if len(nb)==hi_sz:
+                probs_hi += g.nodes[nb]['prob']
+            elif len(nb)==lo_sz:
+                probs_lo += g.nodes[nb]['prob']
+        for nb in g.neighbors(u):
+            if len(nb)==hi_sz:
+                if probs_lo > 0:
+                    bg.add_edge(u, nb, weight=g.nodes[nb]['prob']/probs_hi/2)                
+                else:
+                    bg.add_edge(u, nb, weight=g.nodes[nb]['prob']/probs_hi)                    
+            elif len(nb)==lo_sz:
+                if probs_hi > 0:
+                    bg.add_edge(u, nb, weight=g.nodes[nb]['prob']/probs_lo/2)                    
+                else:
+                    bg.add_edge(u, nb, weight=g.nodes[nb]['prob']/probs_lo)                    
+        
+    return bg
 
 def graph2hasse(M, threshold, maxOrder):
     #graph2hasse chooses a cutoff threshold to establish simplices    
@@ -442,8 +527,14 @@ def graph2hasse_proportional(M, threshold, maxOrder):
                 probs_lo += hasse.nodes[nb]['prob']
         for nb in hasse.neighbors(u):
             if hasse.nodes[nb]['size']==hi_sz:
-                hasse.add_edge(u, nb, weight=hasse.nodes[nb]['prob']/probs_hi/2)                    
+                if probs_lo > 0:
+                    hasse.add_edge(u, nb, weight=hasse.nodes[nb]['prob']/probs_hi/2)                    
+                else:
+                    hasse.add_edge(u, nb, weight=hasse.nodes[nb]['prob']/probs_hi)                    
             elif hasse.nodes[nb]['size']==lo_sz:
-                hasse.add_edge(u, nb, weight=hasse.nodes[nb]['prob']/probs_lo/2)                    
+                if probs_hi > 0:
+                    hasse.add_edge(u, nb, weight=hasse.nodes[nb]['prob']/probs_lo/2)                    
+                else:
+                    hasse.add_edge(u, nb, weight=hasse.nodes[nb]['prob']/probs_lo)                    
             
     return hasse    

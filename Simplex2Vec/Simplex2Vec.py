@@ -124,6 +124,8 @@ class Simplex2Vec():
             raise ValueError('walk_length must be a positive integer.')
 
 
+        self.from_graph = from_graph
+        self.from_hasse = from_hasse
         self._hasse_RW()
 
         return
@@ -137,7 +139,13 @@ class Simplex2Vec():
 
         return cls(g, n_walks, walk_length, p, q, hasse_max_order, hasse_weight_scheme=None,  workers=workers, from_hasse=True)
 
+    @classmethod
+    def from_hasse_DiGraph(cls, G_hasse, n_walks=10, walk_length=10, p=1, q=1, hasse_max_order=None, workers=1):
 
+        g = deepcopy(G_hasse)
+
+        return cls(g, n_walks, walk_length, p, q, hasse_max_order, hasse_weight_scheme=None,  workers=workers, from_hasse=True)
+    
     @classmethod
     def from_graph(cls, inData, threshold=0.5, n_walks=10, walk_length=5, p=1, q=1, hasse_max_order=None, workers=1):
 
@@ -206,18 +214,19 @@ class Simplex2Vec():
         if 0 != len(list(self.hasse.neighbors(node))):
 
             prev_node = None
+            pEqualsq = self.p==self.q
+            isDiGraph = isinstance(self.hasse,nx.DiGraph)                        
 
             for j in range(self.walk_length-1):
 
-                neighb = list(self.hasse.neighbors(node))
-                if isinstance(self.hasse,nx.DiGraph):
+                neighb = list(self.hasse.neighbors(node))                
+                if isDiGraph:
                     w = [self.hasse.edges[node,n]['weight'] for n in neighb]
                 else:
                     w = [self.hasse.nodes[n]['weight'] for n in neighb]
 
-                if None == prev_node:
+                if None == prev_node or pEqualsq:
                     prob = np.array(w)/np.sum(w)
-
                 else:
                     alpha = []
                     for n in neighb:
@@ -255,7 +264,7 @@ class Simplex2Vec():
 
         l_walks = []
         for rw in self.walks:
-            if isinstance(self.hasse,nx.DiGraph):
+            if self.from_graph:
                 l_walks.append([u for u in rw])
             else:
                 l_walks.append(["-".join(sorted(list(u))) for u in rw])
@@ -265,7 +274,6 @@ class Simplex2Vec():
         del l_walks
 
         return
-
 
 
     def fit(self, **skip_gram_params):
