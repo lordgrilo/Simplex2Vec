@@ -470,13 +470,13 @@ def graph2hasse_proportional(M, threshold, maxOrder):
 
     # go through the simplices, create nodes
     all_cliques = []
-    all_cliques_str = []
+    all_cliques_fzst = []
     all_cliques_sz = []
     keeps = []
     for clq in all_cliques_iter:
         sclq = sorted(clq)
         v = np.asarray(sclq)
-        u = str(sclq)
+        u = frozenset(str(ui) for ui in sclq)
         sz = v.size
     
         if maxOrder != None and sz>maxOrder:
@@ -490,12 +490,11 @@ def graph2hasse_proportional(M, threshold, maxOrder):
             prb = np.prod(abs(np.asarray([M[a,b] for a,b in itertools.combinations(v,2)])/maxM))
             #prb = np.prod(.5*(np.log(1+prb) - np.log(1-prb)))
             #print([sz, u, prb])
-            
         
         hasse.add_node(u,size=sz,bNodes=v,prob=prb,name=u)
         
         all_cliques.append(v)
-        all_cliques_str.append(u)
+        all_cliques_fzst.append(u)
         all_cliques_sz.append(sz)
         
     sz_all_cliques = np.size(all_cliques)        
@@ -503,18 +502,18 @@ def graph2hasse_proportional(M, threshold, maxOrder):
     # create edges in the Hasse graph (diagram)
     # Start from the top and work down
     for i in np.arange(sz_all_cliques-1,-1,-1):
-        u = all_cliques_str[i]
+        u = all_cliques_fzst[i]
         v = hasse.nodes[u]['bNodes']
         sz = hasse.nodes[u]['size']
         if sz>1:
             for vv in itertools.combinations(v,sz-1):
-                vvv = str(sorted(vv))
+                vvv = frozenset(str(vi) for vi in sorted(vv))
                 # initially weight directed edges based on target node probabilities
                 hasse.add_edge(u, vvv, weight=hasse.nodes[vvv]['prob'])                    
                 hasse.add_edge(vvv, u, weight=hasse.nodes[u]['prob'])                        
                     
     for i in range(sz_all_cliques):
-        u = all_cliques_str[i]
+        u = all_cliques_fzst[i]
         sz = all_cliques_sz[i]
         hi_sz = sz+1
         probs_hi = 0

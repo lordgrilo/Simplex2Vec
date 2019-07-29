@@ -123,9 +123,10 @@ class Simplex2Vec():
         else:
             raise ValueError('walk_length must be a positive integer.')
 
-
+        # Preserve flags
         self.from_graph = from_graph
         self.from_hasse = from_hasse
+        
         self._hasse_RW()
 
         return
@@ -198,8 +199,8 @@ class Simplex2Vec():
         elif 'LOl' == w_scheme:
             self.hasse = simplex2hasse_LOlinear(cliques, self.max_order)
             
-        #elif 'proportional' == w_scheme:
-        #    self.hasse = simplex2hasse_proportional( cliques , self.max_order)
+        elif 'proportional' == w_scheme:
+            self.hasse = simplex2hasse_proportional( cliques , self.max_order)
 
         else:
             raise ValueError('{} is not a valid weighting scheme.'.format(w_scheme))
@@ -264,10 +265,8 @@ class Simplex2Vec():
 
         l_walks = []
         for rw in self.walks:
-            if self.from_graph:
-                l_walks.append([u for u in rw])
-            else:
-                l_walks.append(["-".join(sorted(list(u))) for u in rw])
+            
+            l_walks.append([",".join(sorted(list(u))) for u in rw])
 
         self.walks = l_walks
 
@@ -280,5 +279,15 @@ class Simplex2Vec():
 
         if 'workers' not in skip_gram_params:
             skip_gram_params['workers'] = self.workers
+            
+        self.model = Word2Vec(self.walks, compute_loss=True, **skip_gram_params)
+        
+        return self.model
+    
+    def refit(self, epochs=1):
 
-        return Word2Vec(self.walks, **skip_gram_params)
+        self._hasse_RW()
+        
+        self.model.train(self.walks, compute_loss=True, total_examples = len(s2v.walks), epochs = epochs)
+
+        return self.model
