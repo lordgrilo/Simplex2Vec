@@ -248,20 +248,11 @@ class Simplex2Vec():
                 for destination in current_neighbors:
                     first_travel_weights.append(1)
                     if destination == source:
-                        if len(destination) > 1:
-                            with_return_weights.append(1/(self.p*(len(destination)-1)))
-                        else:
-                            with_return_weights.append(1/self.p)
+                        with_return_weights.append(1/self.p)
                     elif self.hasse.has_edge(source, destination):
-                        if len(destination) > 1:
-                            with_return_weights.append(1/(len(destination)-1))
-                        else:
-                            with_return_weights.append(1)
+                        with_return_weights.append(1)
                     else:
-                        if len(destination) > 1:
-                            with_return_weights.append(1/(self.q*(len(destination)-1)))
-                        else:
-                            with_return_weights.append(1/self.q)
+                        with_return_weights.append(1/self.q)
                 
                 # Compute total with return probabilities
                 with_return_weights = np.asarray(with_return_weights)
