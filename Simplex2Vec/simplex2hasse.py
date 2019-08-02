@@ -60,7 +60,7 @@ def simplex2hasse_counts(data, max_order=None):
     Output: networkx Graph object
     '''
 
-    epsilon = 1e-15
+    epsilon = 1
        
     def _build_simplices(simplex, l):
         #recursive function that calculates all possible son simplices
