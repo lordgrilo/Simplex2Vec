@@ -15,7 +15,7 @@ from copy import deepcopy
 
 from joblib import Parallel, delayed
 
-from Simplex2Vec_v2.simplex2hasse import *
+from Simplex2Vec.simplex2hasse import *
 
 class Simplex2Vec():
 
@@ -367,7 +367,7 @@ class Simplex2Vec():
 #             mp_pool.close()
             
         else:
-            self.walks.extend(list(map(lambda x: _hasse_RW_helper(x), enumerate(nodes_split))))
+            self.walks.extend(list(map(lambda x: self._hasse_RW_helper(x), enumerate(nodes_split))))
         
         flatten = lambda l: [item for sublist in l for item in sublist]
         flatten_walks = flatten(self.walks)

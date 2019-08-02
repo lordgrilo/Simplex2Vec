@@ -404,7 +404,7 @@ def simplex2hasse_proportional(data, max_order=None):
     weights_dict = {}
     
     # go through the simplices, create nodes
-    for u in tqdm(data, 'Creating Hasse diagram'):
+    for u in tqdm_notebook(data, 'Creating Hasse diagram'):
 
         if None == max_order or (len(u) < max_order+1 and len(u) >= 1):
             if u not in weights_dict:
