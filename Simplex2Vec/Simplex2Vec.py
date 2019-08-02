@@ -5,18 +5,20 @@ import os
 import networkx as nx
 import numpy as np
 import pickle as pkl
+import random
+from platform import python_version
 
 from multiprocessing import Pool
-from tqdm import tqdm
+from tqdm import tqdm_notebook
 from gensim.models import Word2Vec
 from copy import deepcopy
 
 from Simplex2Vec.simplex2hasse import *
 
-
 class Simplex2Vec():
 
-    def __init__(self, G, n_walks=10, walk_length=15, p=1, q=1, hasse_max_order=None, hasse_weight_scheme='LOa',  workers=1, from_hasse=False, from_graph=False):
+    def __init__(self, G, n_walks=10, walk_length=15, p=10000000000., q=1, hasse_max_order=None, 
+        hasse_weight_scheme='HOexp',  workers=1, from_hasse=False, from_graph=False):
         '''
         Finds simplicial complexes in a network, creates Hasse diagram with chosen weighting scheme and performs the random walks.
         G : NetworkX Graph
@@ -26,7 +28,7 @@ class Simplex2Vec():
         walk_length : int (default: 15)
             Number of nodes visited by each RW.
         p : float (default: 1)
-            Return parameter for the RWs (same as in Node2Vec). Set it to a very high value to avoid backtracking.
+            Return parameter for the RWs (same as in Node2Vec). 
         q : float (default: 1)
             In-Out parameter for the RWs (same as in Node2Vec).
         hasse_max_order : int (default: None)
@@ -36,8 +38,12 @@ class Simplex2Vec():
             Must be one of:
             'uniform' : set weight=1 to all nodes in the diagram
             'counts' : set weight=1 to all simplices that are actually found in the data, weight=0 to all the others
-            'LO' : weights heavily biased towards lower-order simplices
-            'LOa' : weights mildly biased towards lower-order simplices
+            'LOlin' : weights heavily biased towards lower-order simplices
+            'LOexp' : weights mildly biased towards lower-order simplices
+        workers : int (default: 1)
+            'HOlin' : weights linearly biased towards higher-order simplices
+        workers : int (default: 1)
+            'HOexp' : weights hardly biased towards higher-order simplices
         workers : int (default: 1)
             Number of processes to be used.
         from_hasse : bool (default: False)
@@ -45,6 +51,14 @@ class Simplex2Vec():
         from_graph : bool (default: False)
             Not meant to be set by the user, keep the default value.
         '''
+        self.PROBABILITIES_KEY = "probabilities"
+        self.FIRST_TRAVEL_KEY = "first_travel_probabilities"
+        self.NEIGHBORS_KEY = "neighbors"
+        
+        # get Python version 
+        pytv = python_version().split(".")[:2]
+        pytv = ".".join(pytv)
+        self.python_ver = float(pytv)
 
         #Check and set G
         if not isinstance(G, nx.Graph):
@@ -83,27 +97,22 @@ class Simplex2Vec():
             self.workers = workers
         else:
             raise ValueError('workers must be a positive integer or -1 (to use all available threads).')
-
+        
 
         #load external Hasse diagram
         if from_hasse:
 
             if None != self.max_order:
-
                 l_remove = [n for n in G.nodes() if len(n)>self.max_order+1]
-
                 if 0 == len(l_remove):
-
                     max_ord = len(max(G.nodes(), key=lambda x: len(x)))-1
                     message = 'No simplices of order bigger than {} (MAX ORDER = {}). Maybe need to re-build Hasse diagram?'.format(self.max_order, max_ord)
                     warnings.warn(message, UserWarning)
                 else:
                     G.remove_nodes_from(l_remove)
-
             self.hasse = G
 
         elif from_graph:
-            
             self.hasse = G
             
         else:
@@ -114,7 +123,6 @@ class Simplex2Vec():
 
             self._build_hasse(hasse_weight_scheme, cliques)
 
-
         #Check and set walk length
         if None == walk_length:
             self.walk_length = self.hasse.number_of_nodes()
@@ -122,11 +130,12 @@ class Simplex2Vec():
             self.walk_length = walk_length
         else:
             raise ValueError('walk_length must be a positive integer.')
-
+            
         # Preserve flags
         self.from_graph = from_graph
         self.from_hasse = from_hasse
-        
+
+        self._precompute_probabilities()
         self._hasse_RW()
 
         return
@@ -134,10 +143,25 @@ class Simplex2Vec():
 		
 
     @classmethod
-    def from_hasse_diagram(cls, G_hasse, n_walks=10, walk_length=10, p=1, q=1, hasse_max_order=None, workers=1):
+    
+
+    def from_hasse_diagram(cls, G_hasse, n_walks=1, walk_length=10, p=1, q=1, hasse_max_order=None, workers=1):
 
         g = deepcopy(G_hasse)
 
+        return cls(g, n_walks, walk_length, p, q, hasse_max_order, hasse_weight_scheme=None,  workers=workers, 
+                   from_hasse=True)
+
+
+    @classmethod
+    def read_hasse_diagram(cls, filename, n_walks=1, walk_length=10, p=1, q=1, hasse_max_order=None, workers=1):
+
+        if os.path.exists(filename):
+            with open(filename, 'rb') as fh:
+                g = pkl.load(fh)
+        else:
+            raise FileNotFoundError('Could not find {}')
+                
         return cls(g, n_walks, walk_length, p, q, hasse_max_order, hasse_weight_scheme=None,  workers=workers, from_hasse=True)
 
     @classmethod
@@ -154,17 +178,6 @@ class Simplex2Vec():
 
         return cls(g, n_walks=n_walks, walk_length=walk_length, p=p, q=q, workers=workers, hasse_max_order=hasse_max_order, from_graph=True)
     
-    @classmethod
-    def read_hasse_diagram(cls, filename, n_walks=10, walk_length=10, p=1, q=1, hasse_max_order=None, workers=1):
-
-        if os.path.exists(filename):
-            with open(filename, 'rb') as fh:
-                g = pkl.load(fh)
-        else:
-            raise FileNotFoundError('Could not find {}')
-                
-        return cls(g, n_walks, walk_length, p, q, hasse_max_order, hasse_weight_scheme=None,  workers=workers, from_hasse=True)
-
 
     def get_hasse_diagram(self, copy=True):
 
@@ -190,88 +203,138 @@ class Simplex2Vec():
         elif 'counts' == w_scheme:
             self.hasse = simplex2hasse_counts(cliques, self.max_order)
 
-        elif 'LO' == w_scheme:
-            self.hasse = simplex2hasse_LO(cliques, self.max_order)
-
-        elif 'LOa' == w_scheme:
-            self.hasse = simplex2hasse_LOadjusted(cliques, self.max_order)
-
-        elif 'LOl' == w_scheme:
+        elif 'LOlin' == w_scheme:
             self.hasse = simplex2hasse_LOlinear(cliques, self.max_order)
+
+        elif 'LOexp' == w_scheme:
+            self.hasse = simplex2hasse_LOexponential(cliques, self.max_order)
+
+        elif 'HOlin' == w_scheme:
+            self.hasse = simplex2hasse_HOlinear(cliques, self.max_order)
+            
+        elif 'HOexp' == w_scheme:
+            self.hasse = simplex2hasse_HOexponential(cliques, self.max_order)
             
         elif 'proportional' == w_scheme:
             self.hasse = simplex2hasse_proportional( cliques , self.max_order)
-
         else:
             raise ValueError('{} is not a valid weighting scheme.'.format(w_scheme))
 
         return
 
+    def _precompute_probabilities(self):
 
-    def _hasse_RW_helper(self, node):
+        first_travel_probababilities_computed = set()
 
-        walk = [node]
-        
-        if 0 != len(list(self.hasse.neighbors(node))):
-
-            prev_node = None
-            pEqualsq = self.p==self.q
-            isDiGraph = isinstance(self.hasse,nx.DiGraph)                        
-
-            for j in range(self.walk_length-1):
-
-                neighb = list(self.hasse.neighbors(node))                
-                if isDiGraph:
-                    w = [self.hasse.edges[node,n]['weight'] for n in neighb]
+        for source in tqdm_notebook(self.hasse.nodes(), desc = "Precomputing probabilities"):
+            # Init probabilities dict 
+            if self.PROBABILITIES_KEY not in self.hasse.node[source]:
+                self.hasse.node[source][self.PROBABILITIES_KEY] = dict()
+                
+            for current_node in self.hasse.neighbors(source):
+                # Init probabilities dict 
+                if self.PROBABILITIES_KEY not in self.hasse.node[current_node]:
+                    self.hasse.node[current_node][self.PROBABILITIES_KEY] = dict()
+                    
+                with_return_weights = []
+                first_travel_weights = []
+                if self.NEIGHBORS_KEY in self.hasse[current_node]:
+                    current_neighbors = self.hasse.node[current_node][self.NEIGHBORS_KEY]
                 else:
-                    w = [self.hasse.nodes[n]['weight'] for n in neighb]
-
-                if None == prev_node or pEqualsq:
-                    prob = np.array(w)/np.sum(w)
-                else:
-                    alpha = []
-                    for n in neighb:
-                        if n == prev_node:
-                            alpha.append(1/self.p)
-                        elif self.hasse.has_edge(n, prev_node):
-                            alpha.append(1)
-                        else:
-                            alpha.append(1/self.q)
-
-                    prob = np.multiply(w,alpha)
+                    current_neighbors = list(self.hasse.neighbors(current_node))
+                current_weight = [self.hasse.nodes[n]['weight'] for n in current_neighbors]
+                
+                # Calculate unnormalized weights
+                for destination in current_neighbors:
+                    first_travel_weights.append(1)
+                    if destination == source:
+                        with_return_weights.append(1/self.p)
+                    elif self.hasse.has_edge(source, destination):
+                        with_return_weights.append(1)
+                    else:
+                        with_return_weights.append(1/self.q)
+                
+                # Compute total with return probabilities
+                with_return_weights = np.asarray(with_return_weights)
+                prob = np.multiply(with_return_weights, current_weight)
+                prob = prob/np.sum(prob)
+                self.hasse.node[current_node][self.PROBABILITIES_KEY][source] = prob
+                
+                # Compute first visit probabilities
+                if current_node not in first_travel_probababilities_computed:
+                    first_travel_weights = np.asarray(first_travel_weights)
+                    prob = np.multiply(first_travel_weights, current_weight)
                     prob = prob/np.sum(prob)
+                    self.hasse.node[current_node][self.FIRST_TRAVEL_KEY] = prob
+                    first_travel_probababilities_computed.add(current_node)
+                self.hasse.node[current_node][self.NEIGHBORS_KEY] = current_neighbors
 
-                prev_node = node
-                node = np.random.choice(neighb, p=prob)
-                walk.append(node)
-        else:
-            walk = walk*self.walk_length
 
-        return walk
+    def _hasse_RW_helper(self, node_list, cpu_index):
+
+        def _RW_iteration(prev_node, current_node, rest_steps):
+            if rest_steps > 0:
+                neighbors_list = self.hasse.node[current_node][self.NEIGHBORS_KEY]
+                if None == prev_node:
+                    prob = self.hasse.node[current_node][self.FIRST_TRAVEL_KEY]
+                else:
+                    prob = self.hasse.node[current_node][self.PROBABILITIES_KEY][prev_node]
+                if self.python_ver > 3.5:
+                    # faster implementation of choice from list
+                    next_node = random.choices(neighbors_list, weights=prob)[0]
+                else:
+                    next_node = np.random.choice(neighbors_list, p=prob)
+                _RW_iteration(current_node, next_node, rest_steps-1)
+                walk.append(next_node)
+
+        walk_list = []
+        # This line is the strange hack
+        print(' ', end='', flush=True)
+        for current_node in tqdm_notebook(node_list, 
+                                          desc = "Generating walks : CPU: {}".format(cpu_index), 
+                                          position = cpu_index):
+            walk_counter = 0
+            while walk_counter < self.n_walks:
+                walk = [current_node]
+                if 0 != len(list(self.hasse.neighbors(current_node))):
+                    prev_node = None
+                    rest_steps = self.walk_length-1
+                    _RW_iteration(prev_node, current_node, rest_steps)
+                else:
+                    walk = walk*self.walk_length
+                walk_list.append(walk)
+                walk_counter += 1
+
+        return walk_list
 
     
     def _hasse_RW(self):
-
-        self.walks = []
         
-        nodes = tqdm([n for n in self.hasse.nodes()]*self.n_walks, 'Creating random walks')
-
-        if self.workers!=1:
-            p = Pool(processes=self.workers)
-            self.walks.extend(p.map(self._hasse_RW_helper, nodes))
-            p.close()
+        self.walks = []
+        nodes = np.asarray([n for n in self.hasse.nodes()])
+        nodes_split = np.array_split(nodes, self.workers)
+        if self.workers != 1:
+            mp_pool = Pool(processes = self.workers)
+            result_list = [mp_pool.apply_async(self._hasse_RW_helper, 
+                                               args = (n_list, index,),
+                                              )
+                                   for index, n_list in enumerate(nodes_split)]
+            mp_pool.close()
+            mp_pool.join()
+            for result in result_list:
+                self.walks.extend(result.get())
         else:
-            self.walks.extend(list(map(lambda x: self._hasse_RW_helper(x), nodes)))
-
+            self.walks.extend(list(map(lambda x: _hasse_RW_helper(x), nodes)))
+        
         l_walks = []
         for rw in self.walks:
-            
-            l_walks.append([",".join(sorted(list(u))) for u in rw])
-
+            rw_parsed = []
+            for u in rw:
+                u_int = sorted([int(x) for x in list(u)])
+                rw_parsed.append("-".join([str(x) for x in u_int]))
+            l_walks.append(rw_parsed)
         self.walks = l_walks
-
         del l_walks
-
         return
 
 
@@ -279,15 +342,12 @@ class Simplex2Vec():
 
         if 'workers' not in skip_gram_params:
             skip_gram_params['workers'] = self.workers
-            
-        self.model = Word2Vec(self.walks, compute_loss=True, **skip_gram_params)
         
-        return self.model
+        self.model = Word2Vec(self.walks, compute_loss=True, **skip_gram_params)
+
+        return self.model 
     
     def refit(self, epochs=1):
-
         self._hasse_RW()
-        
-        self.model.train(self.walks, compute_loss=True, total_examples = len(s2v.walks), epochs = epochs)
-
+        self.model.train(self.walks, compute_loss=True, total_examples = len(self.walks), epochs = epochs)
         return self.model
