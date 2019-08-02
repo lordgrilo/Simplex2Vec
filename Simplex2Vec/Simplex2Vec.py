@@ -169,7 +169,7 @@ class Simplex2Vec():
 
 
     @classmethod
-    def read_hasse_diagram(cls, filename, n_walks=1, walk_length=10, p=1, q=1, hasse_max_order=None, workers=1):
+    def read_hasse_diagram(cls, filename, n_walks=1, walk_length=10, p=1, q=1, rw_bias = "nobias",is_quiet = False,  hasse_max_order=None, workers=1):
 
         if os.path.exists(filename):
             with open(filename, 'rb') as fh:
@@ -177,7 +177,7 @@ class Simplex2Vec():
         else:
             raise FileNotFoundError('Could not find {}')
                 
-        return cls(g, n_walks, walk_length, p, q, hasse_max_order, hasse_weight_scheme=None,  workers=workers, from_hasse=True)
+        return cls(g, n_walks, walk_length, p, q, hasse_max_order, hasse_weight_scheme=None,  workers=workers, from_hasse=True, rw_bias = rw_bias, is_quiet = is_quiet)
 
     @classmethod
     def from_hasse_DiGraph(cls, G_hasse, n_walks=10, walk_length=10, p=1, q=1, hasse_max_order=None, workers=1):
@@ -187,11 +187,11 @@ class Simplex2Vec():
         return cls(g, n_walks, walk_length, p, q, hasse_max_order, hasse_weight_scheme=None,  workers=workers, from_hasse=True)
     
     @classmethod
-    def from_graph(cls, inData, threshold=0.5, n_walks=10, walk_length=5, p=1, q=1, hasse_max_order=None, workers=1):
+    def from_graph(cls, inData, threshold=0.5, n_walks=10, walk_length=5, p=1, q=1, rw_bias = "nobias", is_quiet = False, hasse_max_order=None, workers=1):
 
         g = graph2hasse_proportional(inData, threshold, hasse_max_order)
 
-        return cls(g, n_walks=n_walks, walk_length=walk_length, p=p, q=q, workers=workers, hasse_max_order=hasse_max_order, from_graph=True)
+        return cls(g, n_walks=n_walks, walk_length=walk_length, p=p, q=q, workers=workers, hasse_max_order=hasse_max_order, from_graph=True, rw_bias = rw_bias, is_quiet = is_quiet)
     
 
     def get_hasse_diagram(self, copy=True):
