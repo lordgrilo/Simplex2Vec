@@ -377,7 +377,7 @@ class Simplex2Vec():
             rw_parsed = []
             for u in rw:
                 u_int = sorted([int(x) for x in list(u)])
-                rw_parsed.append("-".join([str(x) for x in u_int]))
+                rw_parsed.append(",".join([str(x) for x in u_int]))
             l_walks.append(rw_parsed)
         self.walks = l_walks
         del l_walks
