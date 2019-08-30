@@ -31,7 +31,7 @@ def read_data_HCP(filename):
     
     return data
 
-def check_prediction(s2v):
+def check_prediction(s2v,testSet):
 
     X = []
     X_labels = []
@@ -41,7 +41,7 @@ def check_prediction(s2v):
         X.append(s2v.model[u])
         X_labels.append(u)
         X_baseNodes.append(literal_eval(X_labels[-1]))
-        X_sizes.append(np.size(X_baseNodes[-1]))
+        X_sizes.append(np.size(X_baseNodes[-1]))            
 
     sza = np.array(X_sizes)
     ns = len(sza)
@@ -69,8 +69,22 @@ def check_prediction(s2v):
             ib = rnk[uk==bb]
             dist_targ.append(dists[ia,ib])
 
-    print('Histogram of target distances')
-    print(np.histogram(dist_targ))
+    print('Histogram of perimeters from already closed triangle')
+    print(np.histogram(np.concatenate(dist_targ)))
+    
+    # Measure perimeter of closed triplets
+    dist_test = []
+    for ts in testSet:
+        u = np.array([int(t) for t in ts])
+        if len(u) !=3:
+            raise Exception('Crazy 8s!')        
+        for aa,bb in itertools.combinations(u, 2):                    
+            ia = rnk[uk==aa]
+            ib = rnk[uk==bb]
+            dist_test.append(dists[ia,ib])
+            
+    print('Histogram of perimeters from triangles yet to close')
+    print(np.histogram(np.concatenate(dist_test)))
 
     # Measure perimeter of all triplets
     dist_control = []
@@ -82,11 +96,12 @@ def check_prediction(s2v):
             ib = rnk[uk==bb]
             dist_control.append(dists[ia,ib])
 
-    print('Histogram of control distances')
-    print(np.histogram(dist_control))        
+    print('Histogram of preimeters of random node triangle')
+    print(np.histogram(np.concatenate(dist_control)))
 
     ax = plt.subplot(111)
-    plt.boxplot([dist_targ, dist_control])
-    ax.set_xticklabels(['Target','Control'])
+    plt.boxplot([dist_targ, dist_test, dist_control])
+    ax.set_xticklabels(['Ideal','Test','Random'])
     ax.set_ylabel('Perimeter')
     plt.show()
+    
