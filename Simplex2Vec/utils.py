@@ -13,6 +13,7 @@ from scipy.spatial.distance import pdist, squareform
 import itertools
 from ast import literal_eval
 import matplotlib.pyplot as plt
+from scipy.stats import mannwhitneyu
 
 def read_simplex_json(path):
 
@@ -105,3 +106,8 @@ def check_prediction(s2v,testSet):
     ax.set_ylabel('Perimeter')
     plt.show()
     
+    stat, p = mannwhitneyu(np.concatenate(dist_control), np.concatenate(dist_test),alternative='greater')    
+    print('One-sided Mann-Whitney that Control is greater than test, p value: ' + str(p))
+
+    stat, p = mannwhitneyu(np.concatenate(dist_control), np.concatenate(dist_targ),alternative='greater')    
+    print('One-sided Mann-Whitney Control is greater than targ, p value: ' + str(p))
