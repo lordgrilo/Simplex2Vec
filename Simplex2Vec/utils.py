@@ -13,7 +13,7 @@ from scipy.spatial.distance import pdist, squareform
 import itertools
 from ast import literal_eval
 import matplotlib.pyplot as plt
-from scipy.stats import mannwhitneyu
+from scipy.stats import ks_2samp
 
 def read_simplex_json(path):
 
@@ -106,8 +106,8 @@ def check_prediction(s2v,testSet):
     ax.set_ylabel('Perimeter')
     plt.show()
     
-    stat, p = mannwhitneyu(np.concatenate(dist_control), np.concatenate(dist_test),alternative='greater')    
-    print('One-sided Mann-Whitney that Control is greater than test, p value: ' + str(p))
+    stat, p = ks_2samp(np.concatenate(dist_test), np.concatenate(dist_control), alternative='less')    
+    print('One-sided Kolmogorov-Smirnov statistic that test distribution is less than control, p value: ' + str(p))
 
-    stat, p = mannwhitneyu(np.concatenate(dist_control), np.concatenate(dist_targ),alternative='greater')    
-    print('One-sided Mann-Whitney Control is greater than targ, p value: ' + str(p))
+    stat, p = ks_2samp(np.concatenate(dist_targ), np.concatenate(dist_control), alternative='less')    
+    print('One-sided Kolmogorov-Smirnov statistic that ideal distribution is less than control, p value: ' + str(p))
